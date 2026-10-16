@@ -23,9 +23,9 @@ function scrub(value) {
   for (const token of [process.env.GH_TOKEN, process.env.GITHUB_TOKEN]) if (token) text = text.split(token).join('[REDACTED]');
   return text.slice(-3000);
 }
-function run(command, args, { allowFailure = false, timeout = 60000 } = {}) {
+function run(command, args, { allowFailure = false, timeout = 60000, input } = {}) {
   const result = spawnSync(command, args, {
-    cwd: ROOT, shell: false, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout,
+    cwd: ROOT, shell: false, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout, input,
     env: { ...process.env, GH_HOST: 'github.com', GH_PROMPT_DISABLED: '1', GH_PAGER: 'cat', GH_DEBUG: '' },
   });
   if (!allowFailure && (result.error || result.status !== 0)) fail(`${command} failed: ${scrub(result.error?.message || result.stderr)}`);
@@ -119,13 +119,16 @@ async function validateLocal(ctx) {
   if (await fs.readFile(path.join(ASSETS, 'SHA256SUMS.txt'), 'utf8') !== sums) fail('SHA256SUMS.txt does not match the four ZIP files');
   return entries;
 }
-function api(endpoint, { allow404 = false, timeout = 60000 } = {}) {
-  const result = run('gh', ['api', '--hostname', 'github.com', '--method', 'GET', '--include', '-H', 'Accept: application/vnd.github+json', '-H', 'X-GitHub-Api-Version: 2022-11-28', endpoint], { allowFailure: true, timeout });
+function api(endpoint, { allow404 = false, timeout = 60000, method = 'GET', body, expectedStatus = 200 } = {}) {
+  const args = ['api', '--hostname', 'github.com', '--method', method, '--include', '-H', 'Accept: application/vnd.github+json', '-H', 'X-GitHub-Api-Version: 2022-11-28'];
+  if (body !== undefined) args.push('--input', '-');
+  args.push(endpoint);
+  const result = run('gh', args, { allowFailure: true, timeout, input: body === undefined ? undefined : JSON.stringify(body) });
   const output = result.stdout || '';
   const statusMatch = /^HTTP\/\S+\s+(\d{3})\b[^\r\n]*\r?\n/m.exec(output);
   const status = statusMatch ? Number(statusMatch[1]) : null;
-  if (allow404 && !result.error && status === 404) return null;
-  if (result.error || result.status !== 0 || status !== 200) fail(`GitHub API failed (${status ?? 'no HTTP response'}): ${endpoint}: ${scrub(result.error?.message || result.stderr)}`);
+  if (allow404 && method === 'GET' && !result.error && status === 404) return null;
+  if (result.error || result.status !== 0 || status !== expectedStatus) fail(`GitHub API failed (${status ?? 'no HTTP response'}): ${endpoint}: ${scrub(result.error?.message || result.stderr)}`);
   const headerEnd = /\r?\n\r?\n/.exec(output.slice(statusMatch.index));
   if (!headerEnd) fail('GitHub API response did not contain a header/body boundary');
   return JSON.parse(output.slice(statusMatch.index + headerEnd.index + headerEnd[0].length));
@@ -162,8 +165,18 @@ function releaseByTag(ctx) {
   fail('Release list exceeded the bounded lookup limit');
 }
 function assertDraft(ctx, release, id) {
-  if (!release || release.tag_name !== ctx.tag || !Number.isSafeInteger(release.id) || (id && release.id !== id)) fail('Release identity changed');
-  if (release.draft !== true) fail('Release is already published; refusing to change it');
+  const details = JSON.stringify({ id: release?.id ?? null, tag: release?.tag_name ?? null, draft: release?.draft ?? null, expectedId: id ?? null, expectedTag: ctx.tag });
+  if (!release || release.tag_name !== ctx.tag || !Number.isSafeInteger(release.id) || (id !== undefined && release.id !== id)) fail('Release identity changed: ' + details);
+  if (release.draft !== true) fail('Release is already published; refusing to change it: ' + details);
+}
+async function releaseById(ctx, id) {
+  if (!Number.isSafeInteger(id) || id < 1) fail('Invalid expected release id: ' + id);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const release = api(`repos/${ctx.repository}/releases/${id}`, { allow404: true });
+    if (release) return release;
+    if (attempt < 4) await sleep(1500);
+  }
+  fail('Release was not readable by id after 5 attempts: ' + JSON.stringify({ expectedId: id, expectedTag: ctx.tag }));
 }
 function remoteAssets(ctx, releaseId) {
   const assets = api(`repos/${ctx.repository}/releases/${releaseId}/assets?per_page=100`);
@@ -216,31 +229,39 @@ async function publish(ctx) {
   checkHead(ctx.commit);
   const entries = await validateLocal(ctx);
   if (release) {
-    assertDraft(ctx, releaseByTag(ctx), release.id);
+    assertDraft(ctx, await releaseById(ctx, release.id), release.id);
     remoteAssets(ctx, release.id); // Reject unexpected assets before editing anything.
     run('gh', ['release', 'edit', ctx.tag, '--repo', ctx.repository, '--draft', '--target', ctx.commit, '--title', ctx.product + ' ' + ctx.tag, '--notes-file', ctx.notes]);
   } else {
-    run('gh', ['release', 'create', ctx.tag, '--repo', ctx.repository, '--draft', '--target', ctx.commit, '--title', ctx.product + ' ' + ctx.tag, '--notes-file', ctx.notes]);
+    // The creation response identifies the draft even before tag/list indexes expose it.
+    release = api(`repos/${ctx.repository}/releases`, {
+      method: 'POST', expectedStatus: 201,
+      body: { tag_name: ctx.tag, target_commitish: ctx.commit, name: ctx.product + ' ' + ctx.tag, body: await fs.readFile(ctx.notes, 'utf8'), draft: true, prerelease: false },
+    });
+    assertDraft(ctx, release);
+    console.log('Created draft: ' + JSON.stringify({ id: release.id, tag: release.tag_name, draft: release.draft }));
   }
-  release = releaseByTag(ctx);
-  assertDraft(ctx, release);
   const releaseId = release.id;
+  release = await releaseById(ctx, releaseId);
+  assertDraft(ctx, release, releaseId);
   const existingTag = tagCommit(ctx);
   if (existingTag === null && release.target_commitish !== ctx.commit) fail('Draft target is not the exact build commit');
   for (const name of ctx.names) {
-    assertDraft(ctx, releaseByTag(ctx), releaseId);
+    assertDraft(ctx, await releaseById(ctx, releaseId), releaseId);
     tagCommit(ctx);
     const existing = remoteAssets(ctx, releaseId).find((asset) => asset.name === name);
     if (!matches(existing, entries.get(name))) {
       run('gh', ['release', 'upload', ctx.tag, path.join(ASSETS, name), '--repo', ctx.repository, '--clobber'], { timeout: 15 * 60 * 1000 });
     }
   }
-  assertDraft(ctx, releaseByTag(ctx), releaseId);
+  assertDraft(ctx, await releaseById(ctx, releaseId), releaseId);
   verifyRemote(ctx, releaseId, entries);
   tagCommit(ctx);
   run('gh', ['release', 'edit', ctx.tag, '--repo', ctx.repository, '--draft=false', '--prerelease=false', '--latest', '--target', ctx.commit]);
-  const published = releaseByTag(ctx);
-  if (!published || published.id !== releaseId || published.draft !== false || published.prerelease !== false) fail('Public release verification failed');
+  const published = await releaseById(ctx, releaseId);
+  if (!published || published.id !== releaseId || published.tag_name !== ctx.tag || published.draft !== false || published.prerelease !== false) {
+    fail('Public release verification failed: ' + JSON.stringify({ id: published?.id ?? null, tag: published?.tag_name ?? null, draft: published?.draft ?? null, prerelease: published?.prerelease ?? null, expectedId: releaseId, expectedTag: ctx.tag }));
+  }
   tagCommit(ctx, true);
   verifyRemote(ctx, releaseId, entries);
   console.log('Published: ' + published.html_url);
