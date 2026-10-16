@@ -1,0 +1,10 @@
+.cache/
+dist/
+node_modules/
+resources/ffmpeg.exe
+resources/ffmpeg
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
