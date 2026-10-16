@@ -1,0 +1,75 @@
+name: Build and publish desktop apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag matching package.json version
+        required: true
+        default: v1.0.0
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.repository }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main' && github.repository_owner == 'apameda'
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Validate release version and native build runner
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Expected Apple Silicon macOS runner');
+          if (process.env.RELEASE_TAG !== `v${pkg.version}`) throw new Error('Release tag must match package.json version');
+          NODE
+
+      - name: Build and verify Windows and both macOS ZIPs
+        run: node scripts/package.mjs --target all --no-unpacked
+
+      - name: Test with the FFmpeg shipped inside the native Mac package
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { execFileSync } from 'node:child_process';
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const product = pkg.productName;
+          const destination = path.join(process.env.RUNNER_TEMP, 'audio-release-native-check');
+          fs.mkdirSync(destination, { recursive: true });
+          execFileSync('/usr/bin/ditto', ['-x', '-k', path.join('dist', `${product}-macOS-arm64.zip`), destination], { stdio: 'inherit' });
+          const ffmpeg = path.join(destination, `${product}-macOS-arm64`, `${product}.app`, 'Contents', 'Resources', 'app', 'resources', 'ffmpeg');
+          execFileSync(ffmpeg, ['-hide_banner', '-version'], { stdio: 'inherit' });
+          fs.appendFileSync(process.env.GITHUB_ENV, `NCM_TEST_FFMPEG=${ffmpeg}\nQQ_TEST_FFMPEG=${ffmpeg}\n`);
+          NODE
+          npm test
+
+      - name: Prepare exact release assets and checksums
+        run: node scripts/release.mjs prepare
+
+      # The repository-scoped ephemeral token is exposed only to this final step.
+      - name: Verify CI and draft assets, then publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release.mjs publish
