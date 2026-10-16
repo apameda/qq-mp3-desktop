@@ -1,0 +1,48 @@
+{
+  "downloadedOn": "2026-10-16",
+  "note": "Original upstream source snapshots for audit; Python vectors were produced by the separately pinned published wheel.",
+  "records": [
+    {
+      "file": "reference-src/presburger/seed.hpp",
+      "url": "https://raw.githubusercontent.com/presburger/qmc-decoder/master/src/seed.hpp",
+      "license": "MIT",
+      "sha256": "59ce9e4a9a386d8a19dabf5f98921bb42eed506cacf06cf0f65b7601c84371c2"
+    },
+    {
+      "file": "reference-src/presburger/LICENSE",
+      "url": "https://raw.githubusercontent.com/presburger/qmc-decoder/master/LICENSE",
+      "license": "MIT",
+      "sha256": "fd0dbf2242ee974760e65358340ed61b2ddd5911f8a146ae44eca9a7e58665e0"
+    },
+    {
+      "file": "reference-src/libtakiyasha/_stdciphers.py",
+      "url": "https://raw.githubusercontent.com/nukemiko/libtakiyasha/master/src/libtakiyasha/_stdciphers.py",
+      "license": "MIT",
+      "sha256": "53c2c5eda1d0ae29c48d59e985e0f7088d942ed2ef5ab40ae63e4587245c23ce"
+    },
+    {
+      "file": "reference-src/libtakiyasha/qmc/_qmcdataciphers.py",
+      "url": "https://raw.githubusercontent.com/nukemiko/libtakiyasha/master/src/libtakiyasha/qmc/_qmcdataciphers.py",
+      "license": "MIT",
+      "sha256": "5745db3ebd8ec7cf65de9ad7088499dc6deb8939470d210a3d16ff030fc1c301"
+    },
+    {
+      "file": "reference-src/libtakiyasha/qmc/_qmckeyciphers.py",
+      "url": "https://raw.githubusercontent.com/nukemiko/libtakiyasha/master/src/libtakiyasha/qmc/_qmckeyciphers.py",
+      "license": "MIT",
+      "sha256": "c121628bd9f3f7b70115fd7d73a11fee36d7a5203ff0ed41bada12d7787d889f"
+    },
+    {
+      "file": "reference-src/libtakiyasha/qmc/_qmcconsts.py",
+      "url": "https://raw.githubusercontent.com/nukemiko/libtakiyasha/master/src/libtakiyasha/qmc/_qmcconsts.py",
+      "license": "MIT",
+      "sha256": "8775e2c1e80f0e6003a92d0d33586c6f25586607200e0fa5bef2c1de8250d482"
+    },
+    {
+      "file": "reference-src/libtakiyasha/LICENSE",
+      "url": "https://raw.githubusercontent.com/nukemiko/libtakiyasha/master/LICENSE",
+      "license": "MIT",
+      "sha256": "fedccfd18ecea390df9980039c70b97f3d0ac1eda9fbdb999e082b2c13538ebc"
+    }
+  ]
+}
