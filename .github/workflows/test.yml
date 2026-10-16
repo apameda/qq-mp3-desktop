@@ -1,0 +1,64 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node 22 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      # Published major versions checked against the official actions projects.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Install verified Windows FFmpeg 9.0.2
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'ffmpeg-9.0.2-essentials_build.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'qq-test-ffmpeg'
+          $url = 'https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.0.2-essentials_build.zip'
+          $expected = '60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba'
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "FFmpeg SHA-256 mismatch: $actual" }
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination
+          $binaries = @(Get-ChildItem -LiteralPath $destination -Filter 'ffmpeg.exe' -Recurse -File)
+          if ($binaries.Count -ne 1) { throw 'Expected exactly one ffmpeg.exe in the verified archive.' }
+          $binary = $binaries[0].FullName
+          & $binary -hide_banner -version
+          if ($LASTEXITCODE -ne 0) { throw 'The verified FFmpeg binary could not start.' }
+          "QQ_TEST_FFMPEG=$binary" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Use system FFmpeg on Ubuntu
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes ffmpeg
+          fi
+          ffmpeg -hide_banner -version
+          echo "QQ_TEST_FFMPEG=$(command -v ffmpeg)" >> "$GITHUB_ENV"
+
+      # Core, main-process mocks and reference-vector tests need no npm packages.
+      # Real sine-wave conversion tests use the FFmpeg selected above.
+      - name: Run unit, queue and real audio conversion tests
+        run: npm test
