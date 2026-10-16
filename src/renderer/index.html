@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>QQ音乐转MP3</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <symbol id="icon-add" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></symbol>
+      <symbol id="icon-bin" viewBox="0 0 24 24"><path d="M3 6h18M9 6V4h6v2M6 6l1 14h10l1-14M10 10v6M14 10v6"/></symbol>
+      <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
+      <symbol id="icon-music" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13M9 9l11-2"/><ellipse cx="5.5" cy="18" rx="3.5" ry="3"/><ellipse cx="16.5" cy="16" rx="3.5" ry="3"/></symbol>
+      <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></symbol>
+      <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></symbol>
+      <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+      <symbol id="icon-cross" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+      <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4 8 9 8 9s8-5 8-9V6Z"/><path d="m8.5 11.5 2.5 2.5 4.5-5"/></symbol>
+      <symbol id="icon-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="5"/><path d="m12 12 9 9M16 16l3-3M18 18l3-3"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="brand-copy"><h1>QQ音乐转MP3</h1><p>让收藏的音乐，随处可听。也可直接转换 FLAC。</p></div>
+      <div class="local-badge"><svg class="icon"><use href="#icon-shield"/></svg><span>本地处理 · 保留原文件</span></div>
+    </header>
+
+    <main>
+      <section class="queue-panel" aria-labelledby="queue-title">
+        <div class="queue-toolbar">
+          <div class="queue-heading"><h2 id="queue-title">转换列表</h2><span class="file-count" id="file-count">0 个文件</span></div>
+          <div class="toolbar-actions">
+            <button class="button button-small button-outline" id="add-files"><svg class="icon"><use href="#icon-add"/></svg>添加文件</button>
+            <button class="button button-small button-outline" id="add-folder"><svg class="icon"><use href="#icon-folder"/></svg>添加文件夹</button>
+            <span class="toolbar-divider"></span>
+            <button class="button button-small button-quiet" id="clear-queue" title="仅清空列表，不删除原文件或 MP3" disabled><svg class="icon"><use href="#icon-bin"/></svg>清空列表</button>
+          </div>
+        </div>
+
+        <div class="drop-area" id="drop-area">
+          <div class="queue-empty" id="queue-empty">
+            <div class="empty-art" aria-hidden="true">
+              <div class="art-orbit"></div>
+              <div class="art-file art-file-back"></div>
+              <div class="art-file art-file-front"><svg class="icon"><use href="#icon-music"/></svg><span>QMC</span></div>
+              <span class="art-spark spark-one"></span><span class="art-spark spark-two"></span>
+            </div>
+            <h3>拖入 QQ 音乐或 FLAC</h3>
+            <p>支持 QMC、MFLAC、MGG，也可直接转换 FLAC</p>
+            <button class="button button-empty" id="empty-add-files">选择 QQ 音乐 / FLAC 文件<svg class="icon"><use href="#icon-arrow"/></svg></button>
+            <span class="empty-note format-note">qmc0 / qmc2 / qmc3 / qmcflac / qmcogg / mflac / mgg / flac</span>
+            <span class="empty-note">自动查找子文件夹 · 重复文件自动去重</span>
+          </div>
+          <div class="file-table" id="file-table" hidden>
+            <div class="table-heading" aria-hidden="true"><span>文件名称</span><span>大小</span><span>状态</span><span>进度</span><span>歌曲密钥 · 可选</span><span></span></div>
+            <div class="file-list" id="file-list" role="list" aria-label="待转换的音乐文件"></div>
+            <div class="drop-hint" id="drop-hint">还可以继续拖入文件或文件夹</div>
+          </div>
+          <div class="drop-overlay" id="drop-overlay" hidden><div class="drop-overlay-content"><svg class="icon"><use href="#icon-add"/></svg><strong>松开以添加音乐</strong><span>文件夹中的 QQ 音乐和 FLAC 也会一起加入</span></div></div>
+        </div>
+      </section>
+
+      <section class="settings-panel" aria-label="转换设置">
+        <div class="setting-output">
+          <label class="setting-label" for="output-dir">保存位置</label>
+          <div class="output-control"><svg class="icon"><use href="#icon-folder"/></svg><input id="output-dir" type="text" value="正在读取默认目录…" readonly aria-label="输出文件夹"><button class="button button-small button-choose" id="choose-output">更改</button></div>
+        </div>
+        <div class="setting-quality"><label class="setting-label" for="bitrate">MP3 音质</label><select id="bitrate" aria-describedby="quality-note"><option value="320">320 kbps · 高品质</option><option value="256">256 kbps · 标准品质</option><option value="192">192 kbps · 更小体积</option></select></div>
+        <p class="quality-note" id="quality-note"><svg class="icon"><use href="#icon-info"/></svg><span>也可直接添加 FLAC 转为 MP3；原音频为 MP3 时直接还原，所选音质用于 FLAC / OGG 转码。</span></p>
+        <p class="quality-note support-note"><svg class="icon"><use href="#icon-key"/></svg><span>支持常见 QMC；部分新版文件需歌曲密钥或暂不支持。每首密钥不同，仅在本次应用内保存。</span></p>
+      </section>
+
+      <section class="batch-panel" aria-label="转换进度">
+        <div class="batch-info"><div class="batch-title-line"><strong id="batch-title">准备好，开始听音乐</strong><span id="batch-percentage"></span></div><div class="overall-track" id="overall-track" role="progressbar" aria-label="整体转换进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div id="overall-progress"></div></div><p id="batch-detail" aria-live="polite">添加 QQ 音乐或 FLAC 文件后，点击「开始转换」。</p></div>
+        <div class="batch-actions"><button class="button button-outline button-open" id="open-output"><svg class="icon"><use href="#icon-folder"/></svg>打开输出文件夹</button><button class="button button-cancel" id="cancel" hidden><span class="stop-square"></span>取消转换</button><button class="button button-primary" id="start" disabled>开始转换<svg class="icon"><use href="#icon-arrow"/></svg></button></div>
+      </section>
+    </main>
+    <footer class="app-footer"><span><span class="footer-dot"></span>无需上传，音乐始终留在你的电脑</span><span>QQ 音乐 → MP3</span></footer>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden><svg class="icon"><use href="#icon-info"/></svg><span id="toast-message"></span><button aria-label="关闭提示" id="toast-close"><svg class="icon"><use href="#icon-cross"/></svg></button></div>
+  <dialog class="key-dialog" id="key-dialog" aria-labelledby="key-title" aria-describedby="key-description">
+    <form id="key-form">
+      <div class="dialog-heading"><div class="dialog-icon"><svg class="icon"><use href="#icon-key"/></svg></div><div><h2 id="key-title">设置歌曲密钥</h2><p>仅用于当前这一首歌曲</p></div><button type="button" class="dialog-close" id="key-close" aria-label="关闭密钥窗口"><svg class="icon"><use href="#icon-cross"/></svg></button></div>
+      <div class="key-song-name" id="key-song-name"></div>
+      <p class="key-description" id="key-description">部分新版 QQ 音乐文件需要对应歌曲的 ekey。每首歌曲的密钥不同，请填写这一首的密钥；留空也可先尝试转换。</p>
+      <div class="key-current-status" id="key-current-status" hidden><svg class="icon"><use href="#icon-check"/></svg><span>这首歌已设置密钥。原密钥不会显示；输入新值可替换。</span></div>
+      <label class="setting-label" for="song-key">歌曲密钥（ekey）</label>
+      <textarea id="song-key" rows="4" maxlength="16384" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="粘贴当前歌曲的 ekey…" aria-describedby="key-privacy"></textarea>
+      <p class="key-privacy" id="key-privacy"><svg class="icon"><use href="#icon-shield"/></svg><span>仅本次应用内使用，不写入磁盘；不会用于其他歌曲，关闭后不保留输入。</span></p>
+      <p class="key-error" id="key-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" class="button button-key-clear" id="key-clear" hidden>清除已设密钥</button><span></span><button type="button" class="button button-outline" id="key-cancel">取消</button><button type="submit" class="button button-primary" id="key-save">保存密钥</button></div>
+    </form>
+  </dialog>
+</body>
+</html>
